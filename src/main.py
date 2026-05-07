@@ -1,45 +1,67 @@
-""" Este módulo incluye el flujo principal del sistema """
-
-import os
-import httpx
-import asyncio
-from dotenv import load_dotenv
+from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+import httpx
+import os
 
-from src.agents.orchestrator_agent import create_pentest_orchestrator
+from agents.orchestrator import get_orchestrator
+from agents.agents import create_specialist
+from state import PentestState
 
-async def main() -> None:
-    """
-    Punto de entrada para la ejecución del orquestador de pentest.
-    """
+import agents.agent_config as agent_config
 
-    model = ChatOpenAI(
-        model="gemma4:26b", 
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL"),
-        http_client=httpx.Client(verify=False),
-        temperature=0, 
-    )
+load_dotenv()
 
-    # Definimos el objetivo del pentest
-    user_prompt = "Hola, que tal, todo preparado?"
+# Configuracion del modelo
+model = ChatOpenAI(
+    base_url=os.getenv("OPENAI_BASE_URL"),
+    api_key=os.getenv("OPENAI_API_KEY"),
+    http_client=httpx.Client(verify=False, timeout=60.0),
+    model=os.getenv("OPENAI_MODEL"),
+    temperature=0
+) 
 
-    # Inicializamos el orquestador
-    pentest_orchestrator = create_pentest_orchestrator(model)
+# Creamos los Agentes
+orchestrator_node = get_orchestrator(model)
 
-    print("--- [Iniciando Pentest] ---")
+scanner_node = create_specialist(model=model, system_prompt=agent_config.SCAN_PROMPT, tools=agent_config.SCAN_TOOLS)
+exploit_node = create_specialist(model=model, system_prompt=agent_config.EXPLOIT_PROMPT, tools=agent_config.EXPLOIT_TOOLS)
 
-    try:
-        # 3. Lanzamos el agente de forma asíncrona
-        result = pentest_orchestrator.invoke(
-            {"messages": [{"role": "user", "content": user_prompt}]}
-        )
+# Construcción del Grafo
+builder = StateGraph(PentestState)
 
-        print(result["messages"][-1].content)
+builder.add_node("ORCHESTRATOR", orchestrator_node)
+builder.add_node("SCANNER", scanner_node)
+builder.add_node("EXPLOITER", exploit_node)
 
-    except Exception as e:
-        print(f"[!] Error durante la ejecución: {e}")
+# Flujo estrella: Agentes -> Orquestador
+builder.add_edge("SCANNER", "ORCHESTRATOR")
+builder.add_edge("EXPLOITER", "ORCHESTRATOR")
 
+# Orquestador -> Siguiente paso (Condicional)
+builder.add_conditional_edges(
+    "ORCHESTRATOR",
+    lambda state: state["next_node"],
+    {
+        "SCANNER": "SCANNER",
+        "EXPLOITER": "EXPLOITER",
+        "FINISH": END
+    }
+)
+
+builder.set_entry_point("ORCHESTRATOR")
+graph = builder.compile()
+
+# Ejecución
 if __name__ == "__main__":
-    load_dotenv()
-    asyncio.run(main())
+    inputs = {
+        "objetivos": ["172.22.0.20"],
+        "messages": [("user", "Empieza el reconocimiento de 172.22.0.20.")],
+        "hallazgos": []
+    }
+    # for output in graph.stream(inputs):
+    #     print(output)
+    for event in graph.stream(inputs):
+        for node_name, state_update in event.items():
+            for key, value in state_update.items():
+                print(f"El nodo {node_name} actualiza el estado '{key}' con el valor: {value}")
