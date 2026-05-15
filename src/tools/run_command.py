@@ -20,10 +20,6 @@ def run_command(command, timeout_sec=300):
         stdout_str = result.stdout.strip()
         stderr_str = result.stderr.strip()
         
-        print(f"--- Comando ejecutado: {' '.join(full_command)} ---")
-        print(f"--- STDOUT ---\n{stdout_str}")
-        print(f"--- STDERR ---\n{stderr_str}")
-        
         # Si el comando falló a nivel de sistema operativo/Docker
         if result.returncode != 0:
             return (f"[!] El comando falló con código {result.returncode}.\n"

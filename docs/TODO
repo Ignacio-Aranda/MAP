@@ -1,0 +1,7 @@
+- [x] Resolver bucle de Scanner
+- [ ] Esquemas de Pydantic para los States
+- [ ] Estudiar como los Agentes usan los Estados y como es que saben usarlos
+- [ ] Conectar con los nuevos agentes de Scanner y Vuln.
+- [ ] Wrapper visualizacion Langraph
+
+- ME HE QUEDADO CON QUE AL EJECUTAR DESPUES DEL NMAP SE QUEDA PILLADO Y NO SIGUE EL SIGUIENTE NODO

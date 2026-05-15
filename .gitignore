@@ -1,3 +1,8 @@
 .env
 .venv
 .mypy_cache
+docker-compose.yml
+Dockerfile.pentest-sandbox
+src/__pycache__
+src/agents/__pycache__
+src/tools/__pycache__
